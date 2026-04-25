@@ -5,6 +5,7 @@ import { createWorker, type Worker } from 'tesseract.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Check, FileText, Loader2, ShieldCheck, Wand2, FileImage, File } from 'lucide-react';
 import { cn, formatExtractedText } from '../lib/utils';
+import { preprocessImageForOCR } from '../lib/imageUtils';
 import { toast } from 'sonner';
 
 interface TextExtractorProps {
@@ -45,14 +46,18 @@ export function TextExtractor({ imageFile: file, onProcessingChange }: TextExtra
         });
         
         workerRef.current = worker;
-        const imageUrl = URL.createObjectURL(file);
+        
+        // Enhance the image before sending to Tesseract to drastically reduce hallucinations
+        setStatus('Enhancing image for AI...');
+        const processedImageUrl = await preprocessImageForOCR(file);
         
         if (!isMounted) {
           await worker.terminate();
           return;
         }
 
-        const { data: { text } } = await worker.recognize(imageUrl);
+        setStatus('Extracting text...');
+        const { data: { text } } = await worker.recognize(processedImageUrl);
         
         if (isMounted) {
           setExtractedText(text);
@@ -62,7 +67,10 @@ export function TextExtractor({ imageFile: file, onProcessingChange }: TextExtra
         
         await worker.terminate();
         workerRef.current = null;
-        URL.revokeObjectURL(imageUrl);
+        // Clean up the generated data URL (base64 or object URL) if it's an object URL
+        if (processedImageUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(processedImageUrl);
+        }
 
       } catch (error) {
         console.error('OCR Error:', error);
@@ -268,7 +276,7 @@ export function TextExtractor({ imageFile: file, onProcessingChange }: TextExtra
                       ? "bg-purple-500/20 text-purple-300 border-purple-500/30" 
                       : "bg-white/5 text-white/50 border-white/10 hover:bg-white/10"
                   )}
-                  title={isImage ? "Toggle anti-noise filter & formatting" : "Toggle smart paragraph formatting"}
+                  title={isImage ? "Toggle anti-noise filter & formatting" : "Toggle formatting"}
                 >
                   <Wand2 className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">{isCleaned ? 'Formatted' : 'Raw'}</span>
