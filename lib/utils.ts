@@ -14,9 +14,8 @@ export function formatExtractedText(text: string, isOcr: boolean = false): strin
   if (isOcr) {
     const lines = processedText.split('\n');
     processedText = lines.map(line => {
-      // Strip all emojis, weird unicode symbols, and non-standard characters. 
-      // Keep only letters, numbers, whitespace, and basic punctuation.
-      let cleaned = line.replace(/[^\p{L}\p{N}\s.,;:!?'"()\-&%$/]/gu, ' ');
+      // Keep only English letters (a-z, A-Z), numbers, whitespace, and basic punctuation.
+      let cleaned = line.replace(/[^a-zA-Z0-9\s.,;:!?'"()\-&%$/]/g, ' ');
       cleaned = cleaned.replace(/\s[.,;:'"-]\s/g, ' ');
       return cleaned.replace(/\s{2,}/g, ' ').trim();
     }).filter(line => {
