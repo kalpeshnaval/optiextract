@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
-import { createWorker } from 'tesseract.js';
+import { createWorker, type Worker } from 'tesseract.js';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, Check, FileText, Loader2, ShieldCheck, Wand2 } from 'lucide-react';
-import { cn, cleanOCRText } from '../lib/utils';
+import { Copy, Check, FileText, Loader2, ShieldCheck, Wand2, FileImage, File } from 'lucide-react';
+import { cn, formatExtractedText } from '../lib/utils';
 import { toast } from 'sonner';
 
 interface TextExtractorProps {
@@ -12,7 +12,7 @@ interface TextExtractorProps {
   onProcessingChange: (isProcessing: boolean) => void;
 }
 
-export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorProps) {
+export function TextExtractor({ imageFile: file, onProcessingChange }: TextExtractorProps) {
   const [extractedText, setExtractedText] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
   const [status, setStatus] = useState<string>('');
@@ -20,24 +20,17 @@ export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorPr
   const [copied, setCopied] = useState<boolean>(false);
   const [isCleaned, setIsCleaned] = useState<boolean>(true);
   
-  // Use a ref to track the current worker so we can terminate it if the component unmounts or image changes
-  const workerRef = useRef<Tesseract.Worker | null>(null);
+  const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
-    // If no image, we do nothing. The component remounts or returns null.
-    if (!imageFile) {
+    if (!file) {
       return;
     }
 
     let isMounted = true;
 
-    const extractText = async () => {
-      setIsProcessing(true);
-      onProcessingChange(true);
-      setExtractedText('');
-      setProgress(0);
+    const extractFromImage = async () => {
       setStatus('Initializing AI Engine (100% Local)...');
-
       try {
         const worker = await createWorker('eng', 1, {
           logger: (m) => {
@@ -52,8 +45,7 @@ export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorPr
         });
         
         workerRef.current = worker;
-
-        const imageUrl = URL.createObjectURL(imageFile);
+        const imageUrl = URL.createObjectURL(file);
         
         if (!isMounted) {
           await worker.terminate();
@@ -76,17 +68,118 @@ export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorPr
         console.error('OCR Error:', error);
         if (isMounted) {
           setStatus('Error extracting text');
-          toast.error('Failed to extract text. Please try another image.');
-        }
-      } finally {
-        if (isMounted) {
-          setIsProcessing(false);
-          onProcessingChange(false);
+          toast.error('Failed to extract text from image.');
         }
       }
     };
 
-    extractText();
+    const extractFromDocx = async () => {
+      setStatus('Parsing Document...');
+      setProgress(0.5); // Fast process, just show half
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        if (!isMounted) return;
+
+        const mammothModule = await import('mammoth');
+        const mammoth = mammothModule.default || mammothModule;
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        setProgress(1);
+
+        if (isMounted) {
+          setExtractedText(result.value);
+          setStatus('Extraction Complete');
+          toast.success('Text extracted successfully!');
+        }
+      } catch (error) {
+        console.error('Docx Error:', error);
+        if (isMounted) {
+          setStatus('Error parsing DOCX');
+          toast.error('Failed to read DOCX file.');
+        }
+      }
+    };
+
+    const extractFromPdf = async () => {
+      setStatus('Parsing PDF Structure...');
+      setProgress(0.1);
+      
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        if (!isMounted) return;
+
+        const pdfjsLib = await import('pdfjs-dist');
+        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+        }
+        
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const maxPages = pdf.numPages;
+        let fullText = '';
+
+        for (let i = 1; i <= maxPages; i++) {
+          if (!isMounted) return;
+          setStatus(`Extracting Page ${i} of ${maxPages}...`);
+          setProgress(i / maxPages);
+          
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          
+          // PDF.js returns TextItems which have a 'str' property
+          const pageText = textContent.items
+            .map((item: unknown) => (item as { str?: string })?.str || '')
+            .join(' ');
+            
+          fullText += pageText + '\n\n';
+        }
+
+        if (isMounted) {
+          // If no text was found, it might be a scanned PDF
+          if (fullText.trim().length === 0) {
+            setExtractedText("No embedded text found in this PDF. It appears to be a scanned document. To extract text from a scanned PDF, please convert the pages to images first and upload them.");
+            setStatus('Scanned PDF Detected');
+            toast.warning('No text found. Document might be scanned.');
+          } else {
+            setExtractedText(fullText);
+            setStatus('Extraction Complete');
+            toast.success('Text extracted successfully!');
+          }
+        }
+      } catch (error) {
+        console.error('PDF Error:', error);
+        if (isMounted) {
+          setStatus('Error parsing PDF');
+          toast.error('Failed to read PDF file.');
+        }
+      }
+    };
+
+    const processFile = async () => {
+      setIsProcessing(true);
+      onProcessingChange(true);
+      setExtractedText('');
+      setProgress(0);
+
+      const fileType = file.type;
+      const fileName = file.name.toLowerCase();
+
+      if (fileType.startsWith('image/')) {
+        await extractFromImage();
+      } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+        await extractFromPdf();
+      } else if (fileType.includes('wordprocessingml.document') || fileName.endsWith('.docx')) {
+        await extractFromDocx();
+      } else {
+        setStatus('Unsupported File Type');
+        toast.error('Please upload an image, PDF, or DOCX file.');
+      }
+
+      if (isMounted) {
+        setIsProcessing(false);
+        onProcessingChange(false);
+      }
+    };
+
+    processFile();
 
     return () => {
       isMounted = false;
@@ -94,13 +187,13 @@ export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorPr
         workerRef.current.terminate();
       }
     };
-  }, [imageFile, onProcessingChange]);
+  }, [file, onProcessingChange]);
 
   const handleCopy = async () => {
-    const textToCopy = isCleaned ? cleanOCRText(extractedText) : extractedText;
+    const textToCopy = isCleaned ? formatExtractedText(extractedText, isImage) : extractedText;
     if (!textToCopy) return;
     try {
-      await navigator.clipboard.writeText(extractedText);
+      await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
       toast.success('Copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
@@ -109,7 +202,10 @@ export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorPr
     }
   };
 
-  if (!imageFile && !isProcessing && !extractedText) return null;
+  if (!file && !isProcessing && !extractedText) return null;
+
+  const isImage = file?.type.startsWith('image/');
+  const isPdf = file?.type === 'application/pdf';
 
   return (
     <div className="w-full max-w-2xl mx-auto mt-8">
@@ -158,12 +254,12 @@ export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorPr
           >
             <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-white/10 flex items-center justify-between bg-white/5">
               <div className="flex items-center space-x-2">
-                <FileText className="w-5 h-5 text-blue-400" />
+                {isImage ? <FileImage className="w-5 h-5 text-pink-400" /> : isPdf ? <FileText className="w-5 h-5 text-red-400" /> : <File className="w-5 h-5 text-blue-400" />}
                 <h3 className="font-semibold text-white">Extracted Text</h3>
               </div>
               
               <div className="flex items-center space-x-2 sm:space-x-4">
-                {/* Clean Toggle */}
+                {/* Clean Toggle (Available for all formats now) */}
                 <button
                   onClick={() => setIsCleaned(!isCleaned)}
                   className={cn(
@@ -172,10 +268,10 @@ export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorPr
                       ? "bg-purple-500/20 text-purple-300 border-purple-500/30" 
                       : "bg-white/5 text-white/50 border-white/10 hover:bg-white/10"
                   )}
-                  title="Toggle clean mode to remove OCR noise"
+                  title={isImage ? "Toggle anti-noise filter & formatting" : "Toggle smart paragraph formatting"}
                 >
                   <Wand2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{isCleaned ? 'Cleaned' : 'Raw'}</span>
+                  <span className="hidden sm:inline">{isCleaned ? 'Formatted' : 'Raw'}</span>
                 </button>
 
                 <button
@@ -200,8 +296,8 @@ export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorPr
                 </div>
               </div>
               <div className="prose prose-invert max-w-none">
-                <pre className="whitespace-pre-wrap font-sans text-sm sm:text-base text-white/90 bg-black/20 p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-white/5 max-h-[300px] sm:max-h-[400px] overflow-y-auto custom-scrollbar">
-                  {(isCleaned ? cleanOCRText(extractedText) : extractedText) || "No text could be extracted from this image."}
+                <pre className="whitespace-pre-wrap font-sans text-sm sm:text-base text-white/90 bg-black/20 p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-white/5 max-h-[300px] sm:max-h-[400px] overflow-y-auto custom-scrollbar leading-relaxed">
+                  {(isCleaned ? formatExtractedText(extractedText, isImage) : extractedText) || "No text could be extracted from this document."}
                 </pre>
               </div>
             </div>

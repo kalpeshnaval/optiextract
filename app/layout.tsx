@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "OptiExtract | Private Client-Side OCR",
+  title: "optiExtractt | Private Client-Side OCR",
   description: "Free, unlimited, and 100% private text extraction from images using client-side AI. Your data never leaves your device.",
   keywords: ["OCR", "Text Extraction", "Private AI", "Client-Side", "Image to Text", "Free OCR"],
 };
