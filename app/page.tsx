@@ -3,11 +3,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Zap, Lock, ScanLine } from 'lucide-react';
-import { FileUploader } from '../components/FileUploader';
+import { ImageUploader } from '../components/ImageUploader';
 import { TextExtractor } from '../components/TextExtractor';
 
 export default function Home() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   return (
@@ -20,7 +20,7 @@ export default function Home() {
           </div>
           <span className="font-bold text-lg sm:text-xl tracking-tight">optiExtractt</span>
         </div>
-        <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm font-medium">
+        <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm font-medium z-50 relative">
           <span className="flex items-center text-green-400 bg-green-400/10 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full border border-green-400/20">
             <Lock className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /> <span className="hidden sm:inline">100% Private</span><span className="sm:hidden">Private</span>
           </span>
@@ -49,12 +49,12 @@ export default function Home() {
           </h1>
           
           <p className="text-base sm:text-lg md:text-xl text-white/60 max-w-2xl mx-auto px-2">
-            Your images and documents never leave your device. optiExtractt uses state-of-the-art client-side AI to process everything right inside your browser. Fast, free, and infinitely secure.
+            Your images are processed securely using state-of-the-art Vision AI and are instantly deleted. Fast, unlimited, and infinitely secure.
           </p>
         </motion.div>
 
         {/* Features Grid */}
-        {!selectedFile && (
+        {!selectedImage && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -82,13 +82,13 @@ export default function Home() {
           transition={{ delay: 0.2, duration: 0.6 }}
           className="w-full relative z-20"
         >
-          <FileUploader 
-            onFileSelected={setSelectedFile} 
+          <ImageUploader 
+            onImageSelected={setSelectedImage} 
             isLoading={isProcessing} 
           />
           <TextExtractor 
-            key={selectedFile ? selectedFile.name + selectedFile.size : 'empty'}
-            imageFile={selectedFile} 
+            key={selectedImage ? selectedImage.name + selectedImage.size : 'empty'}
+            imageFile={selectedImage} 
             onProcessingChange={setIsProcessing} 
           />
         </motion.div>
