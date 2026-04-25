@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import Groq from 'groq-sdk';
 
-// We do not save anything to the server.
-export const runtime = 'edge'; // Edge runtime for ultra-fast serverless
-
 export async function POST(req: Request) {
+  let geminiErrorMsg = '';
+  let groqErrorMsg = '';
+  let openaiErrorMsg = '';
+
   try {
     const { base64Image, mimeType } = await req.json();
 
@@ -17,68 +18,136 @@ export async function POST(req: Request) {
     const groqKey = process.env.GROQ_API_KEY;
 
     if (!geminiKey && !groqKey) {
-      return NextResponse.json({ error: 'Extraction service not properly configured with API keys.' }, { status: 500 });
+      return NextResponse.json({ error: 'Extraction service not properly configured with API keys in .env' }, { status: 500 });
     }
 
     const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
 
     // Attempt 1: Gemini (Best OCR)
     if (geminiKey) {
-      try {
-        const ai = new GoogleGenAI({ apiKey: geminiKey });
-        
-        const response = await ai.models.generateContent({
-          model: 'gemini-1.5-flash',
-          contents: [
-            "Extract all text from this image exactly as written. Do not include markdown formatting like ```. Do not describe the image. Just return the text.",
-            {
-              inlineData: {
-                data: cleanBase64,
-                mimeType: mimeType || 'image/jpeg',
+      const geminiModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      
+      for (const model of geminiModels) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: [
+              "Extract all text from this image exactly as written. Do not include markdown formatting like ```. Do not describe the image. Just return the text.",
+              {
+                inlineData: {
+                  data: cleanBase64,
+                  mimeType: mimeType || 'image/jpeg',
+                }
               }
-            }
-          ]
-        });
+            ]
+          });
 
-        const text = response.text || '';
-        return NextResponse.json({ text });
-      } catch (geminiError: any) {
-        console.error('Gemini Error:', geminiError);
-        // If Groq key is not available, throw the Gemini error
-        if (!groqKey) {
-          throw new Error(geminiError.message || 'Gemini API failed');
+          const text = response.text || '';
+          if (text) {
+            return NextResponse.json({ text });
+          }
+          geminiErrorMsg += `[${model}: empty response] `;
+        } catch (geminiError: any) {
+          console.error(`Gemini ${model} failed:`, geminiError);
+          geminiErrorMsg += `[${model}: ${geminiError.message || 'failed'}] `;
         }
-        console.log('Falling back to Groq...');
+      }
+      console.log('Falling back to Groq...');
+    }
+
+    // Attempt 2: Groq Llama Vision (Fallback)
+    if (groqKey) {
+      const groqModels = [
+        'llama-3.2-11b-vision-preview',
+        'llama-3.2-90b-vision-preview',
+        'llama-3.2-11b-vision-instruct',
+        'llama-3.2-90b-vision-instruct',
+        'llama-3.2-11b-vision',
+        'llama-3.2-90b-vision'
+      ];
+
+      const groq = new Groq({ apiKey: groqKey });
+      
+      for (const model of groqModels) {
+        try {
+          const response = await groq.chat.completions.create({
+            model,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: "Extract all text from this image exactly as written. Do not describe the image. Just return the text." },
+                  {
+                    type: "image_url",
+                    image_url: {
+                      url: `data:${mimeType || 'image/jpeg'};base64,${cleanBase64}`,
+                    },
+                  },
+                ],
+              },
+            ],
+          });
+
+          const text = response.choices[0]?.message?.content || '';
+          if (text) {
+            return NextResponse.json({ text });
+          }
+          groqErrorMsg += `[${model}: empty response] `;
+        } catch (groqError: any) {
+          console.error(`Groq ${model} failed:`, groqError);
+          groqErrorMsg += `[${model}: ${groqError.message || 'failed'}] `;
+        }
       }
     }
 
-    // Attempt 2: Groq Llama 3.2 Vision (Fallback or Primary if only Groq provided)
-    if (groqKey) {
-      const groq = new Groq({ apiKey: groqKey });
-      
-      const response = await groq.chat.completions.create({
-        model: "llama-3.2-11b-vision-preview",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Extract all text from this image exactly as written. Do not describe the image. Just return the text." },
+    // Attempt 3: OpenAI GPT-4o Mini (Ultimate Fallback)
+    const openAIKey = process.env.OPENAI_API_KEY;
+    if (openAIKey) {
+      try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openAIKey}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
               {
-                type: "image_url",
-                image_url: {
-                  url: `data:${mimeType || 'image/jpeg'};base64,${cleanBase64}`,
-                },
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'Extract all text from this image exactly as written. Do not describe the image. Just return the text.' },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: `data:${mimeType || 'image/jpeg'};base64,${cleanBase64}`,
+                    },
+                  },
+                ],
               },
             ],
-          },
-        ],
-      });
+          }),
+        });
 
-      const text = response.choices[0]?.message?.content || '';
-      return NextResponse.json({ text });
+        const data = await response.json();
+        if (data.error) {
+          openaiErrorMsg = data.error.message || 'OpenAI API returned error';
+        } else {
+          const text = data.choices?.[0]?.message?.content || '';
+          if (text) {
+            return NextResponse.json({ text });
+          }
+          openaiErrorMsg = 'OpenAI returned empty text';
+        }
+      } catch (openaiError: any) {
+        console.error('OpenAI failed:', openaiError);
+        openaiErrorMsg = openaiError.message || 'OpenAI network error';
+      }
     }
 
-    return NextResponse.json({ error: 'All API attempts failed.' }, { status: 500 });
+    const combinedError = `Gemini: ${geminiErrorMsg || 'Skipped'}. Groq: ${groqErrorMsg || 'Skipped'}. OpenAI: ${openaiErrorMsg || 'Skipped'}`;
+    return NextResponse.json({ error: combinedError }, { status: 500 });
 
   } catch (error: any) {
     console.error('Extraction API Error:', error);
