@@ -148,7 +148,7 @@ export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorPr
             exit={{ opacity: 0, scale: 0.95 }}
             className="glass-card p-6 sm:p-8 rounded-2xl sm:rounded-3xl border border-blue-500/30 shadow-[0_0_40px_rgba(59,130,246,0.1)] relative overflow-hidden"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-blue-500/10 animate-shimmer" />
+            <div className="absolute inset-0 bg-linear-to-r from-blue-500/10 via-purple-500/10 to-blue-500/10 animate-shimmer" />
             <div className="flex flex-col items-center justify-center space-y-4 sm:space-y-6 relative z-10">
               <div className="relative">
                 <div className="absolute inset-0 bg-blue-500 rounded-full blur-xl opacity-20 animate-pulse" />
@@ -186,7 +186,7 @@ export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorPr
             exit={{ opacity: 0, scale: 0.95 }}
             className="glass-card rounded-2xl sm:rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 pointer-events-none" />
+            <div className="absolute inset-0 bg-linear-to-br from-blue-500/5 to-purple-500/5 pointer-events-none" />
             
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 relative z-10">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -196,10 +196,10 @@ export function TextExtractor({ imageFile, onProcessingChange }: TextExtractorPr
                   </div>
                   <div>
                     <h3 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
-                      AI Extracted Text
+                      Extracted Text
                     </h3>
                     <p className="text-xs sm:text-sm text-white/50">
-                      Perfectly formatted by Vision AI
+                      Ready to copy
                     </p>
                   </div>
                 </div>

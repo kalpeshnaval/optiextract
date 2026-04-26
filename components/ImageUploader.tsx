@@ -72,7 +72,7 @@ export function ImageUploader({ onImageSelected, isLoading }: ImageUploaderProps
                   y: isDragActive ? -10 : 0,
                   scale: isDragActive ? 1.1 : 1
                 }}
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-tr from-blue-500/20 to-purple-500/20 flex items-center justify-center ring-1 ring-white/10 group-hover:ring-white/30 transition-all shadow-[0_0_30px_rgba(59,130,246,0.3)]"
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-linear-to-tr from-blue-500/20 to-purple-500/20 flex items-center justify-center ring-1 ring-white/10 group-hover:ring-white/30 transition-all shadow-[0_0_30px_rgba(59,130,246,0.3)]"
               >
                 <UploadCloud className="w-8 h-8 sm:w-10 sm:h-10 text-blue-400" />
               </motion.div>
@@ -92,7 +92,7 @@ export function ImageUploader({ onImageSelected, isLoading }: ImageUploaderProps
             </div>
             
             {/* Ambient hover effect */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/5 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+            <div className="absolute inset-0 bg-linear-to-tr from-blue-500/5 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
           </motion.div>
           </div>
         ) : (
@@ -112,7 +112,7 @@ export function ImageUploader({ onImageSelected, isLoading }: ImageUploaderProps
             />
             
             {/* Top Bar for File Info / Clear */}
-            <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute top-0 left-0 right-0 p-4 bg-linear-to-b from-black/80 to-transparent flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="flex items-center space-x-2 bg-black/50 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/10">
                 <FileImage className="w-4 h-4 text-blue-400" />
                 <span className="text-xs font-medium text-white/90">Ready for extraction</span>
